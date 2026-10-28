@@ -5,6 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { sessionsApi } from "@/services/sessions";
 import { ArrowLeft, Download } from "lucide-react";
 import type { TranscriptTurn } from "@/types";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { useToast } from "@/components/ui/toast";
+
 
 export default function TranscriptPage() {
   const { id, sessionId } = useParams<{ id: string; sessionId: string }>();
@@ -12,6 +15,9 @@ export default function TranscriptPage() {
   const [candidateName, setCandidateName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  usePageTitle(candidateName ? `Transcript · ${candidateName}` : "Transcript");
+  const { toast } = useToast();
+
 
   useEffect(() => {
     Promise.all([
@@ -38,7 +44,9 @@ export default function TranscriptPage() {
     a.download = `transcript-session-${sessionId}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+    toast("Transcript downloaded");
   };
+
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">

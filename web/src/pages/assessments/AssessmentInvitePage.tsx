@@ -17,6 +17,9 @@ import { assessmentsApi } from "@/services/assessments";
 import { LEVEL_LABELS } from "@/utils/constants";
 import { ArrowLeft, Copy, Check, Eye, Pencil, Clock, Plus, UserRound } from "lucide-react";
 import type { Assessment, Session } from "@/types";
+import { useToast } from "@/components/ui/toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
+
 
 function SessionRow({
   session,
@@ -132,6 +135,9 @@ export default function AssessmentInvitePage() {
   const [newSessionCopied, setNewSessionCopied] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [candidateNameInput, setCandidateNameInput] = useState("");
+  const { toast } = useToast();
+  usePageTitle(assessment ? assessment.name : "Assessment");
+
 
   const loadSessions = useCallback(async () => {
     const res = await assessmentsApi.getSessions(Number(id));
@@ -170,10 +176,12 @@ export default function AssessmentInvitePage() {
       const created = res.data.session;
       setNewSession(created);
       setSessions((prev) => [created, ...prev]);
+      toast("Invite link created successfully");
     } finally {
       setCreatingSession(false);
     }
   };
+
 
   const copyLink = (session: Session, id: number) => {
     navigator.clipboard.writeText(session.invite_url);

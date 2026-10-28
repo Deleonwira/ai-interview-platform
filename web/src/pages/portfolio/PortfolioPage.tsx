@@ -11,6 +11,9 @@ import { portfoliosApi } from "@/services/portfolios";
 import { usePolling } from "@/hooks/usePolling";
 import { ArrowLeft, Download, Loader2, RefreshCw, Zap, FileText } from "lucide-react";
 import type { Portfolio, AssessorOverride, Vacancy } from "@/types";
+import { useToast } from "@/components/ui/toast";
+import { usePageTitle } from "@/hooks/usePageTitle";
+
 
 export default function PortfolioPage() {
   const { id, sessionId } = useParams<{ id: string; sessionId: string }>();
@@ -23,6 +26,9 @@ export default function PortfolioPage() {
   const [selectedVacancy, setSelectedVacancy] = useState<string>("");
   const [exporting, setExporting] = useState<"pdf" | "json" | null>(null);
   const [candidateName, setCandidateName] = useState<string | null>(null);
+  const { toast } = useToast();
+  usePageTitle(candidateName ? `Portfolio · ${candidateName}` : "Portfolio");
+
 
   const fetchPortfolio = useCallback(async () => {
     const res = await sessionsApi.getPortfolio(Number(sessionId));
@@ -80,6 +86,7 @@ export default function PortfolioPage() {
         a.download = `portfolio-${sessionId}.json`;
         a.click();
         URL.revokeObjectURL(url);
+        toast("Portfolio exported as JSON");
       } else {
         const blob = new Blob([res.data as BlobPart], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
@@ -88,6 +95,7 @@ export default function PortfolioPage() {
         a.download = `portfolio-${sessionId}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
+        toast("Portfolio exported as PDF");
       }
     } finally {
       setExporting(null);

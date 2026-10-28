@@ -46,6 +46,8 @@ jobs:
           DB_USERNAME: postgres
           DB_PASSWORD: 123
           DB_NAME: rakamin_test
+          ALLOWED_ORIGINS: "*"
+          SECRET_KEY_BASE: "ci_secret_key_base_for_test_environment"
           GEMINI_API_KEY: dummy_key_for_testing
           GEMINI_LIVE_MODEL: gemini-3.1-flash-live-preview
           GEMINI_FLASH_MODEL: gemini-3.5-flash

@@ -28,6 +28,8 @@ module Api
         else
           json_error(feedback.errors.full_messages.first, :unprocessable_entity)
         end
+      rescue ActiveRecord::RecordNotUnique
+        json_error("Feedback has already been submitted for this session", :unprocessable_entity)
       end
 
       # GET /api/v1/sessions/:id/feedback

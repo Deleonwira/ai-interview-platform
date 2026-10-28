@@ -20,3 +20,4 @@ class CreateSessionFeedbacks < ActiveRecord::Migration[7.0]
     add_check_constraint :session_feedbacks, 'rating >= 1 AND rating <= 5', name: 'chk_feedback_rating'
   end
 end
+

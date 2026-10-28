@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Star, AlertTriangle, CheckCircle, MessageSquare, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,12 +41,20 @@ export default function CandidateFeedbackForm({
   const [hasComplaint, setHasComplaint] = useState(false);
   const [complaintText, setComplaintText] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(alreadySubmitted);
+  const [submitted, setSubmitted] = useState(alreadySubmitted ?? false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Sync submitted state when alreadySubmitted prop updates asynchronously
+  // (candidateInfo loads after mount, so initial prop value may be undefined)
+  useEffect(() => {
+    if (alreadySubmitted) {
+      setSubmitted(true);
+    }
+  }, [alreadySubmitted]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!rating) {
+    if (!rating || rating < 1 || rating > 5) {
       setErrorMsg("Mohon berikan rating bintang terlebih dahulu.");
       return;
     }
@@ -262,3 +270,4 @@ export default function CandidateFeedbackForm({
     </div>
   );
 }
+

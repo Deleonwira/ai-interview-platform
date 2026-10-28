@@ -25,3 +25,4 @@ export const feedbackApi = {
   getBySession: (sessionId: number) =>
     api.get<{ feedback: CandidateFeedback | null }>(`/sessions/${sessionId}/feedback`),
 };
+

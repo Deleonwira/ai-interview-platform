@@ -3,15 +3,16 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { tenantAtom } from "@/stores/tenantAtom";
 import { authAtom, clearToken } from "@/stores/authAtom";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, ClipboardList, Briefcase, LogOut, Sun, Moon, Kanban } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Briefcase, LogOut, Sun, Moon, Kanban, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard",  label: "Dashboard",   icon: LayoutDashboard },
   { href: "/assessments", label: "Assessments", icon: ClipboardList },
-  { href: "/vacancies", label: "Vacancies", icon: Briefcase },
-  { href: "/pipeline", label: "Pipeline", icon: Kanban },
+  { href: "/vacancies",  label: "Vacancies",   icon: Briefcase },
+  { href: "/pipeline",  label: "Pipeline",    icon: Kanban },
+  { href: "/calendar",  label: "Calendar",    icon: CalendarDays },
 ];
 
 export default function AssessorLayout() {

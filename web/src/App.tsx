@@ -17,6 +17,7 @@ import VacancyListPage from "@/pages/vacancies/VacancyListPage";
 import VacancyNewPage from "@/pages/vacancies/VacancyNewPage";
 import VacancyEditPage from "@/pages/vacancies/VacancyEditPage";
 import PipelinePage from "@/pages/pipeline/PipelinePage";
+import CalendarPage from "@/pages/calendar/CalendarPage";
 import InterviewPage from "@/pages/interview/InterviewPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="/vacancies/new" element={<VacancyNewPage />} />
           <Route path="/vacancies/:id/edit" element={<VacancyEditPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
         </Route>
       </Route>
 

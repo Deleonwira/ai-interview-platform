@@ -1,32 +1,105 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dashboardsApi, type DashboardData } from "@/services/dashboards";
+import { pipelineApi, deriveColumn, type PipelineSession } from "@/services/pipeline";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import {
-  Clock,
   Plus,
+  Briefcase,
   Radio,
   Eye,
   ArrowRight,
   ChevronRight,
+  Clock,
   Users,
-  Briefcase,
+  Mail,
+  CheckCircle2,
+  AlertCircle,
+  Star,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// ── Calendar helpers (inline, no import needed) ───────────────────────────────
+
+type EventType = "invited" | "started" | "ended" | "failed";
+
+const EVENT_DOT: Record<EventType, string> = {
+  invited: "bg-blue-500",
+  started: "bg-amber-500",
+  ended:   "bg-emerald-500",
+  failed:  "bg-rose-500",
+};
+
+const EVENT_STYLE: Record<EventType, { bg: string; text: string; Icon: React.ElementType }> = {
+  invited: { bg: "bg-blue-50 dark:bg-blue-950/30",    text: "text-blue-700 dark:text-blue-300",       Icon: Mail },
+  started: { bg: "bg-amber-50 dark:bg-amber-950/30",  text: "text-amber-700 dark:text-amber-300",     Icon: Radio },
+  ended:   { bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-700 dark:text-emerald-300", Icon: CheckCircle2 },
+  failed:  { bg: "bg-rose-50 dark:bg-rose-950/30",    text: "text-rose-700 dark:text-rose-300",       Icon: AlertCircle },
+};
+
+const PIPELINE_COL_STYLE = {
+  invited:      { label: "Invited",     color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" },
+  interviewing: { label: "Live",        color: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" },
+  evaluated:    { label: "Evaluated",   color: "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300" },
+  shortlisted:  { label: "Shortlisted", color: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300" },
+  hired:        { label: "Hired",       color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" },
+  rejected:     { label: "Rejected",    color: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300" },
+};
+
+const WEEK_DAYS_SHORT = ["M", "T", "W", "T", "F", "S", "S"];
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function toLocalDateStr(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function toLocalTimeStr(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function buildMiniGrid(year: number, month: number): Date[] {
+  const first = new Date(year, month, 1);
+  const startDow = (first.getDay() + 6) % 7;
+  const start = new Date(first);
+  start.setDate(first.getDate() - startDow);
+  const days: Date[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+function dKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [dashData, setDashData] = useState<DashboardData | null>(null);
+  const [sessions, setSessions] = useState<PipelineSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const navigate = useNavigate();
   usePageTitle("Dashboard");
 
+  // Calendar state
+  const today = new Date();
+  const [calYear]  = useState(today.getFullYear());
+  const [calMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState(dKey(today));
+
   const loadData = useCallback(async () => {
     try {
-      const res = await dashboardsApi.get();
-      setData(res.data);
+      const [dashRes, pipeRes] = await Promise.all([
+        dashboardsApi.get(),
+        pipelineApi.getSessions(),
+      ]);
+      setDashData(dashRes.data);
+      setSessions(pipeRes.data.sessions);
       setError(false);
     } catch {
       setError(true);
@@ -35,149 +108,138 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Auto-refresh when active interviews exist
+  // Auto-refresh when live interviews exist
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    const hasActive = (data?.live_interviews?.length ?? 0) > 0;
-    if (hasActive) {
-      pollingRef.current = setInterval(loadData, 6000);
-    } else {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+    const hasActive = (dashData?.live_interviews?.length ?? 0) > 0;
+    if (hasActive) { pollingRef.current = setInterval(loadData, 6000); }
+    else if (pollingRef.current) { clearInterval(pollingRef.current); }
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [dashData?.live_interviews, loadData]);
+
+  // ── Calendar events derived from sessions ──
+  const calEvents = useMemo(() => {
+    const map: Record<string, { type: EventType; time: string; session: PipelineSession; label: string }[]> = {};
+    for (const s of sessions) {
+      const push = (iso: string, type: EventType, label: string) => {
+        const date = toLocalDateStr(iso);
+        (map[date] ??= []).push({ type, time: iso, session: s, label });
+      };
+      if (s.created_at) push(s.created_at, "invited", "Candidate invited");
+      if (s.started_at) push(s.started_at, "started", "Interview started");
+      if (s.ended_at)   push(s.ended_at, s.end_reason === "error" ? "failed" : "ended",
+        s.end_reason === "error" ? "Interview failed" : "Interview completed");
     }
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+    // sort each date by time
+    Object.values(map).forEach(arr => arr.sort((a, b) => a.time.localeCompare(b.time)));
+    return map;
+  }, [sessions]);
+
+  const miniGrid = useMemo(() => buildMiniGrid(calYear, calMonth), [calYear, calMonth]);
+  const todayKey = dKey(today);
+  const selectedEvents = calEvents[selectedDate] ?? [];
+
+  // ── Pipeline stage counts ──
+  const pipelineCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      invited: 0, interviewing: 0, evaluated: 0, shortlisted: 0, hired: 0, rejected: 0,
     };
-  }, [data?.live_interviews, loadData]);
+    sessions.forEach(s => { counts[deriveColumn(s)] = (counts[deriveColumn(s)] || 0) + 1; });
+    return counts;
+  }, [sessions]);
 
-  if (loading) {
+  // Actionable sessions: evaluated but not shortlisted yet (top 3)
+  const evaluatedSessions = useMemo(() =>
+    sessions.filter(s => deriveColumn(s) === "evaluated").slice(0, 3),
+  [sessions]);
+
+  if (loading) return <DashboardSkeleton />;
+
+  if (error || !dashData) {
     return (
-      <div className="max-w-4xl mx-auto space-y-10 py-4">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-40" />
-          <Skeleton className="h-4 w-72" />
-        </div>
-        <div className="flex gap-8">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="space-y-1">
-              <Skeleton className="h-8 w-10" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-          ))}
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
+      <div className="py-16 text-center space-y-3">
+        <p className="text-sm text-muted-foreground">Failed to load dashboard.</p>
+        <Button variant="outline" size="sm" onClick={loadData}>Try Again</Button>
       </div>
     );
   }
 
-  if (error || !data) {
-    return (
-      <div className="max-w-4xl mx-auto py-16 text-center space-y-3">
-        <p className="text-sm text-muted-foreground">Failed to load dashboard data.</p>
-        <Button variant="outline" size="sm" onClick={() => loadData()}>
-          Try Again
-        </Button>
-      </div>
-    );
-  }
-
-  const { stats, live_interviews, recent_assessments, recent_sessions } = data;
-  const completionRate =
-    stats.total_candidates > 0
-      ? Math.round((stats.completed_count / stats.total_candidates) * 100)
-      : 0;
+  const { stats, live_interviews, recent_assessments, recent_sessions } = dashData;
+  const completionRate = stats.total_candidates > 0
+    ? Math.round((stats.completed_count / stats.total_candidates) * 100)
+    : 0;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 py-2">
+    <div className="space-y-8">
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Overview of your interviews, candidates, and vacancies.
+            {today.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="ghost"
-            size="sm"
+            variant="ghost" size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => navigate("/vacancies/new")}
           >
-            <Briefcase className="h-3.5 w-3.5 mr-1.5" />
-            New Vacancy
+            <Briefcase className="h-3.5 w-3.5 mr-1.5" /> New Vacancy
           </Button>
           <Button size="sm" className="h-8 text-xs" onClick={() => navigate("/assessments/new")}>
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            New Assessment
+            <Plus className="h-3.5 w-3.5 mr-1.5" /> New Assessment
           </Button>
         </div>
       </div>
 
-      {/* Stats — inline horizontal */}
-      <div className="flex flex-wrap gap-x-8 gap-y-4">
-        <StatItem label="Assessments" value={stats.total_assessments} />
-        <div className="w-px bg-border self-stretch hidden sm:block" />
-        <StatItem label="Candidates" value={stats.total_candidates} />
-        <div className="w-px bg-border self-stretch hidden sm:block" />
-        <StatItem label="Completed" value={stats.completed_count} sub={`${completionRate}% rate`} />
-        <div className="w-px bg-border self-stretch hidden sm:block" />
-        <StatItem label="Vacancies" value={stats.total_vacancies} />
-        {stats.active_count > 0 && (
-          <>
-            <div className="w-px bg-border self-stretch hidden sm:block" />
-            <StatItem label="Active Now" value={stats.active_count} accent />
-          </>
-        )}
+      {/* ── Stats Row ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-px border rounded-xl overflow-hidden bg-border">
+        {[
+          { label: "Assessments",   value: stats.total_assessments },
+          { label: "Candidates",    value: stats.total_candidates },
+          { label: "Completed",     value: stats.completed_count,  sub: `${completionRate}%` },
+          { label: "Vacancies",     value: stats.total_vacancies },
+          { label: "Active Now",    value: stats.active_count, accent: true },
+        ].map((s) => (
+          <div key={s.label} className="bg-background px-5 py-4">
+            <div className={cn("text-2xl font-bold tabular-nums", s.accent && s.value > 0 && "text-primary")}>
+              {s.value}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+            {s.sub && <div className="text-[11px] text-muted-foreground/60 mt-0.5">{s.sub} rate</div>}
+          </div>
+        ))}
       </div>
 
-      {/* Live banner */}
+      {/* ── Live Banner ── */}
       {live_interviews.length > 0 && (
-        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+        <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-medium">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
               </span>
-              {live_interviews.length} Live Interview{live_interviews.length > 1 ? "s" : ""}
+              {live_interviews.length} Live Interview{live_interviews.length > 1 ? "s" : ""} in Progress
             </div>
             <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-              <Radio className="h-3 w-3" /> Auto-syncing
+              <Radio className="h-3 w-3" /> Auto-syncing every 6s
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {live_interviews.map((live) => (
-              <div
-                key={live.id}
-                className="flex items-center justify-between px-3 py-2.5 rounded-md bg-background border hover:border-primary/40 transition-colors"
-              >
+              <div key={live.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-background border hover:border-primary/40 transition-colors">
                 <div className="min-w-0 pr-3">
-                  <p className="text-sm font-medium truncate">
-                    {live.candidate_name || `Candidate #${live.id}`}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {live.assessment_name || "Interview Session"}
-                  </p>
+                  <p className="text-sm font-medium truncate">{live.candidate_name || `Candidate #${live.id}`}</p>
+                  <p className="text-xs text-muted-foreground truncate">{live.assessment_name || "Interview Session"}</p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 h-7 text-xs"
-                  onClick={() =>
-                    navigate(`/assessments/${live.assessment_id}/sessions/${live.id}/monitor`)
-                  }
-                >
-                  <Eye className="h-3 w-3 mr-1" />
-                  Watch
+                <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs"
+                  onClick={() => navigate(`/assessments/${live.assessment_id}/sessions/${live.id}/monitor`)}>
+                  <Eye className="h-3 w-3 mr-1" /> Watch
                 </Button>
               </div>
             ))}
@@ -185,142 +247,237 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Two-column activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* ── Main 3-column grid ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Recent Assessments */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Recent Assessments
-            </h2>
-            <Link
-              to="/assessments"
-              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 transition-colors"
-            >
-              View all <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
+        {/* ── COL 1+2: Calendar mini + Recent Activity ── */}
+        <div className="lg:col-span-2 space-y-6">
 
-          {recent_assessments.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-4">No assessments yet.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {recent_assessments.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => navigate(`/assessments/${a.id}/invite`)}
-                  className="w-full flex items-center justify-between py-3 group text-left"
-                >
-                  <div className="min-w-0 pr-3">
-                    <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                      {a.name}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> {a.time_limit_min} min
-                      </span>
-                      <span>·</span>
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" /> {a.candidate_count ?? 0}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-muted-foreground transition-colors" />
-                </button>
+          {/* Mini Calendar Widget */}
+          <SectionCard
+            title="This Month"
+            linkTo="/calendar"
+            linkLabel="Full calendar"
+            titleExtra={
+              <span className="text-xs text-muted-foreground">
+                {MONTH_NAMES[calMonth]} {calYear}
+              </span>
+            }
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Compact month grid */}
+              <div>
+                <div className="grid grid-cols-7 mb-1">
+                  {WEEK_DAYS_SHORT.map((d, i) => (
+                    <div key={i} className="text-center text-[10px] font-medium text-muted-foreground py-0.5">{d}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-px">
+                  {miniGrid.map((day, i) => {
+                    const key = dKey(day);
+                    const isCurrentMonth = day.getMonth() === calMonth;
+                    const isToday = key === todayKey;
+                    const isSelected = key === selectedDate;
+                    const events = calEvents[key] ?? [];
+                    const types = [...new Set(events.map(e => e.type))];
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setSelectedDate(key)}
+                        className={cn(
+                          "flex flex-col items-center py-1 rounded-md transition-colors text-[11px]",
+                          isCurrentMonth ? "hover:bg-muted/50" : "opacity-30",
+                          isSelected && "bg-primary/10 ring-1 ring-primary/30",
+                        )}
+                      >
+                        <span className={cn(
+                          "h-5 w-5 flex items-center justify-center rounded-full font-medium",
+                          isToday && "bg-primary text-primary-foreground",
+                        )}>
+                          {day.getDate()}
+                        </span>
+                        {types.length > 0 && (
+                          <div className="flex gap-0.5 mt-0.5">
+                            {types.slice(0, 3).map(t => (
+                              <span key={t} className={cn("h-1 w-1 rounded-full", EVENT_DOT[t])} />
+                            ))}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Today's / selected day events */}
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  {selectedDate === todayKey ? "Today's Events" : new Date(selectedDate + "T00:00:00").toLocaleDateString([], { month: "short", day: "numeric" })}
+                </p>
+                {selectedEvents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground/60 py-2">No activity.</p>
+                ) : (
+                  selectedEvents.slice(0, 5).map((ev, i) => {
+                    const s = EVENT_STYLE[ev.type];
+                    const Icon = s.Icon;
+                    return (
+                      <div key={i} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px]", s.bg)}>
+                        <Icon className={cn("h-3 w-3 shrink-0", s.text)} />
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium truncate block">
+                            {ev.session.candidate_name || `Candidate #${ev.session.id}`}
+                          </span>
+                        </div>
+                        <span className="text-muted-foreground shrink-0">{toLocalTimeStr(ev.time)}</span>
+                      </div>
+                    );
+                  })
+                )}
+                {selectedEvents.length > 5 && (
+                  <p className="text-[10px] text-muted-foreground pl-1">+{selectedEvents.length - 5} more</p>
+                )}
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* Recent Sessions */}
+          <SectionCard title="Recent Sessions" linkTo="/assessments" linkLabel="View all">
+            {recent_sessions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No sessions yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {recent_sessions.slice(0, 5).map((s) => {
+                  const displayName = s.candidate_name || `Candidate #${s.id}`;
+                  const handleClick = () => {
+                    if (s.status === "active") navigate(`/assessments/${s.assessment_id}/sessions/${s.id}/monitor`);
+                    else if (s.status === "ended" && s.end_reason !== "error") navigate(`/assessments/${s.assessment_id}/sessions/${s.id}/portfolio`);
+                    else navigate(`/assessments/${s.assessment_id}/invite`);
+                  };
+                  return (
+                    <button key={s.id} onClick={handleClick}
+                      className="w-full flex items-center justify-between py-2.5 group text-left">
+                      <div className="min-w-0 pr-3">
+                        <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{displayName}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{s.assessment_name || "Interview Session"}</p>
+                      </div>
+                      <SessionBadge status={s.status} endReason={s.end_reason} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
+        </div>
+
+        {/* ── COL 3: Pipeline + Recent Assessments ── */}
+        <div className="space-y-6">
+
+          {/* Pipeline Overview Widget */}
+          <SectionCard title="Pipeline" linkTo="/pipeline" linkLabel="Full view">
+            {/* Stage count badges */}
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {(Object.entries(PIPELINE_COL_STYLE) as [string, { label: string; color: string }][]).map(([id, style]) => (
+                <span key={id} className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", style.color)}>
+                  {pipelineCounts[id] ?? 0} {style.label}
+                </span>
               ))}
             </div>
-          )}
-        </section>
 
-        {/* Recent Sessions */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Recent Sessions
-            </h2>
-            <Link
-              to="/assessments"
-              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 transition-colors"
-            >
-              View all <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          {recent_sessions.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-4">No candidate sessions yet.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {recent_sessions.map((s) => {
-                const displayName = s.candidate_name || `Candidate #${s.id}`;
-                const handleClick = () => {
-                  if (s.status === "active") {
-                    navigate(`/assessments/${s.assessment_id}/sessions/${s.id}/monitor`);
-                  } else if (s.status === "ended" && s.end_reason !== "error") {
-                    navigate(`/assessments/${s.assessment_id}/sessions/${s.id}/portfolio`);
-                  } else {
-                    navigate(`/assessments/${s.assessment_id}/invite`);
-                  }
-                };
-
-                return (
-                  <button
-                    key={s.id}
-                    onClick={handleClick}
-                    className="w-full flex items-center justify-between py-3 group text-left"
+            {/* Actionable: evaluated cards */}
+            {evaluatedSessions.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-muted-foreground font-medium mb-1.5 flex items-center gap-1">
+                  <Star className="h-3 w-3 text-violet-500" /> Ready to shortlist
+                </p>
+                {evaluatedSessions.map((s) => (
+                  <div key={s.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg border bg-background hover:border-primary/30 transition-colors cursor-pointer group"
+                    onClick={() => navigate(`/assessments/${s.assessment_id}/sessions/${s.id}/portfolio`)}
                   >
-                    <div className="min-w-0 pr-3">
-                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
-                        {displayName}
+                    <div className="min-w-0 pr-2">
+                      <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
+                        {s.candidate_name || `Candidate #${s.id}`}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {s.assessment_name || "Interview Session"}
-                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">{s.assessment_name}</p>
                     </div>
-                    <SessionStatusDot status={s.status} endReason={s.end_reason} />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            )}
 
+            {evaluatedSessions.length === 0 && pipelineCounts["evaluated"] === 0 && (
+              <p className="text-xs text-muted-foreground/60">No candidates awaiting review.</p>
+            )}
+          </SectionCard>
+
+          {/* Recent Assessments */}
+          <SectionCard title="Recent Assessments" linkTo="/assessments" linkLabel="View all">
+            {recent_assessments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No assessments yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {recent_assessments.slice(0, 4).map((a) => (
+                  <button key={a.id} onClick={() => navigate(`/assessments/${a.id}/invite`)}
+                    className="w-full flex items-center justify-between py-2.5 group text-left">
+                    <div className="min-w-0 pr-3">
+                      <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{a.name}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {a.time_limit_min}m</span>
+                        <span>·</span>
+                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {a.candidate_count ?? 0}</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-muted-foreground transition-colors" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────
+// ── Section Card ─────────────────────────────────────────────────────────────
 
-function StatItem({
-  label,
-  value,
-  sub,
-  accent,
+function SectionCard({
+  title,
+  linkTo,
+  linkLabel,
+  titleExtra,
+  children,
 }: {
-  label: string;
-  value: number;
-  sub?: string;
-  accent?: boolean;
+  title: string;
+  linkTo: string;
+  linkLabel: string;
+  titleExtra?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-[60px]">
-      <div className={cn("text-2xl font-bold tabular-nums leading-none", accent && "text-primary")}>
-        {value}
+    <div className="rounded-xl border bg-background overflow-hidden">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h2>
+          {titleExtra}
+        </div>
+        <Link
+          to={linkTo}
+          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 transition-colors"
+        >
+          {linkLabel} <ArrowRight className="h-3 w-3 ml-0.5" />
+        </Link>
       </div>
-      <div className="text-xs text-muted-foreground mt-1">{label}</div>
-      {sub && <div className="text-[11px] text-muted-foreground/70 mt-0.5">{sub}</div>}
+      <div className="p-4">{children}</div>
     </div>
   );
 }
 
-function SessionStatusDot({
-  status,
-  endReason,
-}: {
-  status: string;
-  endReason?: string | null;
-}) {
+// ── Session Badge ─────────────────────────────────────────────────────────────
+
+function SessionBadge({ status, endReason }: { status: string; endReason?: string | null }) {
   if (status === "active") {
     return (
       <span className="flex items-center gap-1 text-[11px] font-medium text-primary shrink-0">
@@ -333,22 +490,47 @@ function SessionStatusDot({
     );
   }
   if (status === "ended" && endReason !== "error") {
-    return (
-      <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
-        Done
-      </span>
-    );
+    return <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 shrink-0">Done</span>;
   }
   if (status === "ended" && endReason === "error") {
-    return (
-      <span className="text-[11px] font-medium text-destructive shrink-0">
-        Failed
-      </span>
-    );
+    return <span className="text-[11px] font-medium text-destructive shrink-0">Failed</span>;
   }
+  return <span className="text-[11px] font-medium text-muted-foreground shrink-0">Awaiting</span>;
+}
+
+// ── Skeleton ─────────────────────────────────────────────────────────────────
+
+function DashboardSkeleton() {
   return (
-    <span className="text-[11px] font-medium text-muted-foreground shrink-0">
-      Awaiting
-    </span>
+    <div className="space-y-8">
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-36" />
+          <Skeleton className="h-4 w-52" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-28" />
+          <Skeleton className="h-8 w-36" />
+        </div>
+      </div>
+      <div className="grid grid-cols-5 gap-px border rounded-xl overflow-hidden bg-border">
+        {[1,2,3,4,5].map(i => (
+          <div key={i} className="bg-background p-5 space-y-2">
+            <Skeleton className="h-7 w-10" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-52 w-full rounded-xl" />
+        </div>
+        <div className="space-y-6">
+          <Skeleton className="h-56 w-full rounded-xl" />
+          <Skeleton className="h-52 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
   );
 }

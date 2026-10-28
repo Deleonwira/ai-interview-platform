@@ -27,6 +27,8 @@ import {
 import { ArrowLeft, CheckCircle, Clock, Radio, Zap } from "lucide-react";
 import type { TranscriptTurn } from "@/types";
 import { cn } from "@/lib/utils";
+import { usePageTitle } from "@/hooks/usePageTitle";
+
 
 function ElapsedTimer({ startedAt }: { startedAt: string }) {
   const [elapsed, setElapsed] = useState(0);
@@ -59,6 +61,8 @@ export default function LiveMonitorPage() {
   const [ending, setEnding] = useState(false);
   const [endError, setEndError] = useState(false);
   const [sessionActive, setSessionActive] = useState(true);
+  usePageTitle(assessmentName ? `Live Monitor · ${assessmentName}` : "Live Monitor");
+
   const lastTurnRef = useRef<number>(0);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -217,8 +221,8 @@ export default function LiveMonitorPage() {
                   className="h-2"
                 />
                 {skill.last_signal && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    "{skill.last_signal}"
+                  <p className="text-xs text-muted-foreground truncate italic">
+                    &ldquo;{skill.last_signal}&rdquo;
                   </p>
                 )}
               </div>
@@ -253,8 +257,8 @@ export default function LiveMonitorPage() {
                       className="h-2"
                     />
                     {skill.last_signal && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        "{skill.last_signal}"
+                      <p className="text-xs text-muted-foreground truncate italic">
+                        &ldquo;{skill.last_signal}&rdquo;
                       </p>
                     )}
                   </div>

@@ -9,7 +9,6 @@ import {
   Plus,
   Briefcase,
   Radio,
-  Eye,
   ArrowRight,
   ChevronRight,
   Clock,
@@ -18,7 +17,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Star,
-  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -166,7 +164,7 @@ export default function DashboardPage() {
     );
   }
 
-  const { stats, live_interviews, recent_assessments, recent_sessions } = dashData;
+  const { stats, recent_assessments, recent_sessions } = dashData;
   const completionRate = stats.total_candidates > 0
     ? Math.round((stats.completed_count / stats.total_candidates) * 100)
     : 0;
@@ -214,38 +212,6 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
-
-      {/* ── Live Banner ── */}
-      {live_interviews.length > 0 && (
-        <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-              </span>
-              {live_interviews.length} Live Interview{live_interviews.length > 1 ? "s" : ""} in Progress
-            </div>
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-              <Radio className="h-3 w-3" /> Auto-syncing every 6s
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {live_interviews.map((live) => (
-              <div key={live.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-background border hover:border-primary/40 transition-colors">
-                <div className="min-w-0 pr-3">
-                  <p className="text-sm font-medium truncate">{live.candidate_name || `Candidate #${live.id}`}</p>
-                  <p className="text-xs text-muted-foreground truncate">{live.assessment_name || "Interview Session"}</p>
-                </div>
-                <Button size="sm" variant="outline" className="shrink-0 h-7 text-xs"
-                  onClick={() => navigate(`/assessments/${live.assessment_id}/sessions/${live.id}/monitor`)}>
-                  <Eye className="h-3 w-3 mr-1" /> Watch
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Main 3-column grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

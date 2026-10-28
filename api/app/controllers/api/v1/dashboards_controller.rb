@@ -18,16 +18,37 @@ module Api
         completed_count = sessions_scope.where(status: 'ended').where.not(end_reason: 'error').count
         pending_count   = sessions_scope.where(status: 'pending').count
 
-        recent_assessments = assessments_scope.limit(5).map do |a|
+        recent_assessments = assessments_scope.limit(5).includes(:sessions).map do |a|
+          sessions = a.sessions
+          total_candidates = sessions.size
+          active_cnt = sessions.count { |s| s.status == 'active' }
+          pending_cnt = sessions.count { |s| s.status == 'pending' }
+          completed_cnt = sessions.count { |s| s.status == 'ended' }
+
+          overall_status = if total_candidates.zero?
+                             'no_candidates'
+                           elsif active_cnt.positive?
+                             'active'
+                           elsif pending_cnt.positive?
+                             'uncomplete'
+                           else
+                             'completed'
+                           end
+
           {
             id:                 a.id,
             name:               a.name,
             time_limit_min:     a.time_limit_min,
-            language:           a.language,
+            language:           a.language || 'en',
             created_at:         a.created_at,
-            candidate_count:    a.candidate_count,
-            overall_status:     a.overall_status,
-            candidates_summary: a.candidates_summary
+            candidate_count:    total_candidates,
+            overall_status:     overall_status,
+            candidates_summary: {
+              total:     total_candidates,
+              active:    active_cnt,
+              pending:   pending_cnt,
+              completed: completed_cnt
+            }
           }
         end
 
@@ -73,4 +94,3 @@ module Api
     end
   end
 end
-

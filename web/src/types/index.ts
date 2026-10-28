@@ -177,6 +177,25 @@ export interface CandidateInfo {
   role_title: string;
   time_limit_min: number;
   session_status: string;
+  feedback_submitted?: boolean;
+}
+
+export type FeedbackExperienceTag =
+  | "smooth"
+  | "technical_issue"
+  | "confusing"
+  | "too_long"
+  | "other";
+
+export interface CandidateFeedback {
+  id?: number;
+  session_id?: number;
+  rating: number; // 1 to 5
+  experience_tag?: FeedbackExperienceTag | string;
+  feedback_text?: string;
+  has_complaint: boolean;
+  complaint_text?: string;
+  submitted_at?: string;
 }
 
 export interface PaginationMeta {

@@ -178,10 +178,11 @@ module Api
         end
 
         json_response(
-          session_id:      session.id,
-          role_title:      assessment.name,
-          time_limit_min:  assessment.time_limit_min,
-          session_status:  session.status
+          session_id:         session.id,
+          role_title:         assessment.name,
+          time_limit_min:     assessment.time_limit_min,
+          session_status:     session.status,
+          feedback_submitted: session.session_feedback.present?
         )
       end
 

@@ -6,12 +6,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import SkillPortfolioCard from "@/components/portfolio/SkillPortfolioCard";
+import CandidateFeedbackCard from "@/components/portfolio/CandidateFeedbackCard";
 import { sessionsApi } from "@/services/sessions";
 import { vacanciesApi } from "@/services/vacancies";
 import { portfoliosApi } from "@/services/portfolios";
+import { feedbackApi } from "@/services/feedback";
 import { usePolling } from "@/hooks/usePolling";
 import { ArrowLeft, Download, Loader2, RefreshCw, Zap, FileText } from "lucide-react";
-import type { Portfolio, AssessorOverride, Vacancy } from "@/types";
+import type { Portfolio, AssessorOverride, Vacancy, CandidateFeedback } from "@/types";
 import { useToast } from "@/components/ui/toast";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
@@ -21,6 +23,8 @@ export default function PortfolioPage() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState<CandidateFeedback | null>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
   const [overrides, setOverrides] = useState<Record<number, AssessorOverride>>({});
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
   const [selectedVacancy, setSelectedVacancy] = useState<string>("");
@@ -48,14 +52,23 @@ export default function PortfolioPage() {
   }, [sessionId]);
 
   useEffect(() => {
-    Promise.all([fetchPortfolio(), vacanciesApi.list(), sessionsApi.get(Number(sessionId))])
-      .then(([, vRes, sRes]) => {
+    Promise.all([
+      fetchPortfolio(),
+      vacanciesApi.list(),
+      sessionsApi.get(Number(sessionId)),
+      feedbackApi.getBySession(Number(sessionId)).catch(() => ({ data: { feedback: null } })),
+    ])
+      .then(([, vRes, sRes, fRes]) => {
         setVacancies(vRes.data.vacancies);
         setCandidateName(sRes.data.session.candidate_name ?? null);
         setAssessmentName(sRes.data.session.assessment?.name ?? null);
+        setFeedback((fRes as any)?.data?.feedback ?? null);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setFeedbackLoading(false);
+      });
   }, [fetchPortfolio, sessionId]);
 
   // Poll while generating
@@ -271,6 +284,23 @@ export default function PortfolioPage() {
           </div>
         </>
       )}
+
+      {/* Candidate Feedback & Complaints Section */}
+      <Separator />
+      <div className="space-y-3 pt-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Candidate Feedback & Experience</h2>
+          {feedback?.has_complaint && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-medium border border-red-500/20">
+              Complaint Reported
+            </span>
+          )}
+        </div>
+        <CandidateFeedbackCard
+          feedback={feedback}
+          loading={feedbackLoading}
+        />
+      </div>
     </div>
   );
 }

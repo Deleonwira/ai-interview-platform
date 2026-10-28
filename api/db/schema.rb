@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2026_05_05_000002) do
+ActiveRecord::Schema[7.0].define(version: 2026_10_28_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -130,6 +130,22 @@ ActiveRecord::Schema[7.0].define(version: 2026_05_05_000002) do
     t.index ["session_id"], name: "index_portfolios_on_session_id", unique: true
   end
 
+  create_table "session_feedbacks", force: :cascade do |t|
+    t.bigint "session_id", null: false
+    t.bigint "tenant_id", null: false
+    t.integer "rating", null: false
+    t.string "experience_tag", limit: 50
+    t.text "feedback_text"
+    t.boolean "has_complaint", default: false, null: false
+    t.text "complaint_text"
+    t.datetime "submitted_at", default: -> { "now()" }, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["session_id"], name: "idx_session_feedbacks_session_id", unique: true
+    t.index ["tenant_id"], name: "idx_session_feedbacks_tenant_id"
+    t.check_constraint "rating >= 1 AND rating <= 5", name: "chk_feedback_rating"
+  end
+
   create_table "sessions", force: :cascade do |t|
     t.bigint "tenant_id", null: false
     t.bigint "assessment_id", null: false
@@ -215,6 +231,7 @@ ActiveRecord::Schema[7.0].define(version: 2026_05_05_000002) do
   add_foreign_key "fit_gap_reports", "vacancies"
   add_foreign_key "portfolio_skills", "portfolios"
   add_foreign_key "portfolios", "sessions"
+  add_foreign_key "session_feedbacks", "sessions"
   add_foreign_key "sessions", "assessments"
   add_foreign_key "transcript_turns", "sessions"
   add_foreign_key "vacancy_skills", "vacancies"

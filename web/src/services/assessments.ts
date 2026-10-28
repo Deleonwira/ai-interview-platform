@@ -8,11 +8,30 @@ export interface AssessmentPayload {
   assessment_skills_attributes: Partial<AssessmentSkill>[];
 }
 
+export interface AssessmentListParams {
+  page?: number;
+  search?: string;
+  status?: string;
+  sort_by?: "created_at" | "updated_at";
+}
+
 export const assessmentsApi = {
-  list: (page = 1) =>
-    api.get<{ assessments: Assessment[]; meta: PaginationMeta }>("/assessments", {
-      params: { page },
-    }),
+  list: (params?: AssessmentListParams | number, search?: string) => {
+    // Handle both old signature list(page, search) and new list(params)
+    const options: AssessmentListParams =
+      typeof params === "number"
+        ? { page: params, search }
+        : params || {};
+
+    return api.get<{ assessments: Assessment[]; meta: PaginationMeta }>("/assessments", {
+      params: {
+        page: options.page ?? 1,
+        search: options.search?.trim() || undefined,
+        status: options.status || undefined,
+        sort_by: options.sort_by || undefined,
+      },
+    });
+  },
 
   get: (id: number) =>
     api.get<{ assessment: Assessment }>(`/assessments/${id}`),
@@ -31,8 +50,14 @@ export const assessmentsApi = {
 
   delete: (id: number) => api.delete(`/assessments/${id}`),
 
-  getSessions: (assessmentId: number) =>
-    api.get<{ sessions: Session[] }>(`/assessments/${assessmentId}/sessions`),
+  getSessions: (
+    assessmentId: number,
+    params?: { page?: number; search?: string; status?: string; all?: boolean }
+  ) =>
+    api.get<{ sessions: Session[]; meta?: PaginationMeta }>(
+      `/assessments/${assessmentId}/sessions`,
+      { params }
+    ),
 
   createSession: (assessmentId: number, candidateName?: string, candidateId?: number) =>
     api.post<{ session: Session; invite_url: string }>(

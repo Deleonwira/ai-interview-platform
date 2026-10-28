@@ -11,9 +11,25 @@ module Api
       # GET /api/v1/assessments/:assessment_id/sessions
       def index
         assessment = Assessment.find(params[:assessment_id])
-        sessions = assessment.sessions.order(created_at: :desc)
+        scope = assessment.sessions.order(created_at: :desc)
 
-        json_response(sessions: sessions.map(&method(:session_json)))
+        if params[:search].present?
+          scope = scope.where("candidate_name ILIKE ?", "%#{params[:search].strip}%")
+        end
+
+        if params[:status].present? && Session::STATUSES.include?(params[:status])
+          scope = scope.where(status: params[:status])
+        end
+
+        if params[:all] == 'true' || params[:paginate] == 'false'
+          json_response(sessions: scope.map(&method(:session_json)))
+        else
+          sessions = paginate(scope)
+          json_response(
+            sessions: sessions.map(&method(:session_json)),
+            meta: pagination_meta(sessions)
+          )
+        end
       rescue ActiveRecord::RecordNotFound
         json_error("Assessment not found", :not_found)
       end

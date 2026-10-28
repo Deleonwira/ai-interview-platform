@@ -7,6 +7,14 @@ export interface Assessment {
   created_by?: number;
   created_at?: string;
   updated_at?: string;
+  candidate_count?: number;
+  overall_status?: "no_candidates" | "active" | "uncomplete" | "completed";
+  candidates_summary?: {
+    total: number;
+    active: number;
+    pending: number;
+    completed: number;
+  };
   skills?: AssessmentSkill[];
   latest_session?: {
     status: "pending" | "active" | "ended";

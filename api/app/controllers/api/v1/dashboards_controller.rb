@@ -15,17 +15,19 @@ module Api
         total_vacancies   = vacancies_scope.count
 
         active_sessions = sessions_scope.where(status: 'active').includes(:assessment)
-        completed_count = sessions_scope.where(status: 'ended').where.not(end_reason: 'error').count
-        pending_count   = sessions_scope.where(status: 'pending').count
+        completed_count   = sessions_scope.where(status: 'ended').where.not(end_reason: 'error').count
+        pending_count     = sessions_scope.where(status: 'pending').count
+        shortlisted_count = sessions_scope.where(pipeline_stage: 'shortlisted').count
+        hired_count       = sessions_scope.where(pipeline_stage: 'hired').count
 
         recent_assessments = assessments_scope.limit(5).includes(:sessions).map do |a|
-          sessions = a.sessions
-          total_candidates = sessions.size
-          active_cnt = sessions.count { |s| s.status == 'active' }
-          pending_cnt = sessions.count { |s| s.status == 'pending' }
-          completed_cnt = sessions.count { |s| s.status == 'ended' }
+          a_sessions = a.sessions
+          a_total_candidates = a_sessions.size
+          active_cnt = a_sessions.count { |s| s.status == 'active' }
+          pending_cnt = a_sessions.count { |s| s.status == 'pending' }
+          completed_cnt = a_sessions.count { |s| s.status == 'ended' }
 
-          overall_status = if total_candidates.zero?
+          overall_status = if a_total_candidates.zero?
                              'no_candidates'
                            elsif active_cnt.positive?
                              'active'
@@ -41,10 +43,10 @@ module Api
             time_limit_min:     a.time_limit_min,
             language:           a.language || 'en',
             created_at:         a.created_at,
-            candidate_count:    total_candidates,
+            candidate_count:    a_total_candidates,
             overall_status:     overall_status,
             candidates_summary: {
-              total:     total_candidates,
+              total:     a_total_candidates,
               active:    active_cnt,
               pending:   pending_cnt,
               completed: completed_cnt
@@ -84,7 +86,9 @@ module Api
             total_vacancies:   total_vacancies,
             active_count:      active_sessions.size,
             completed_count:   completed_count,
-            pending_count:     pending_count
+            pending_count:     pending_count,
+            shortlisted_count: shortlisted_count,
+            hired_count:       hired_count
           },
           live_interviews:    live_interviews,
           recent_assessments: recent_assessments,

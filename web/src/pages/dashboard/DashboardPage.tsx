@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Star,
+  ClipboardList,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -166,8 +168,56 @@ export default function DashboardPage() {
 
   const { stats, recent_assessments, recent_sessions } = dashData;
   const completionRate = stats.total_candidates > 0
-    ? Math.round((stats.completed_count / stats.total_candidates) * 100)
+    ? Math.min(100, Math.round((stats.completed_count / stats.total_candidates) * 100))
     : 0;
+
+  const statItems = [
+    {
+      label: "Assessments",
+      value: stats.total_assessments,
+      sub: "Active agendas",
+      icon: ClipboardList,
+      to: "/assessments",
+    },
+    {
+      label: "Vacancies",
+      value: stats.total_vacancies,
+      sub: "Target roles",
+      icon: Briefcase,
+      to: "/vacancies",
+    },
+    {
+      label: "Candidates",
+      value: stats.total_candidates,
+      sub: stats.active_count > 0 ? `${stats.active_count} active now` : "Total applicants",
+      accent: stats.active_count > 0,
+      icon: Users,
+      to: "/pipeline",
+    },
+    {
+      label: "Completed",
+      value: stats.completed_count,
+      sub: `${completionRate}% rate`,
+      icon: CheckCircle2,
+      to: "/assessments",
+    },
+    {
+      label: "Shortlisted",
+      value: pipelineCounts["shortlisted"] ?? stats.shortlisted_count ?? 0,
+      sub: "In pipeline",
+      valueColor: "text-indigo-600 dark:text-indigo-400",
+      icon: Star,
+      to: "/pipeline",
+    },
+    {
+      label: "Hired",
+      value: pipelineCounts["hired"] ?? stats.hired_count ?? 0,
+      sub: "Offer accepted",
+      valueColor: "text-emerald-600 dark:text-emerald-400",
+      icon: UserCheck,
+      to: "/pipeline",
+    },
+  ];
 
   return (
     <div className="space-y-8">
@@ -195,22 +245,38 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Stats Row ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-px border rounded-xl overflow-hidden bg-border">
-        {[
-          { label: "Assessments",   value: stats.total_assessments },
-          { label: "Candidates",    value: stats.total_candidates },
-          { label: "Completed",     value: stats.completed_count,  sub: `${completionRate}%` },
-          { label: "Vacancies",     value: stats.total_vacancies },
-          { label: "Active Now",    value: stats.active_count, accent: true },
-        ].map((s) => (
-          <div key={s.label} className="bg-background px-5 py-4">
-            <div className={cn("text-2xl font-bold tabular-nums", s.accent && s.value > 0 && "text-primary")}>
-              {s.value}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px border rounded-xl overflow-hidden bg-border">
+        {statItems.map((s) => {
+          const Icon = s.icon;
+          return (
+            <div
+              key={s.label}
+              onClick={() => navigate(s.to)}
+              className="bg-background px-4 py-3.5 hover:bg-muted/40 cursor-pointer transition-colors group flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors font-medium">
+                  {s.label}
+                </span>
+                <Icon className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+              </div>
+              <div className="mt-2">
+                <div
+                  className={cn(
+                    "text-2xl font-bold tabular-nums leading-tight",
+                    s.valueColor,
+                    s.accent && "text-primary"
+                  )}
+                >
+                  {s.value}
+                </div>
+                <div className="text-[11px] text-muted-foreground/70 mt-0.5 truncate">
+                  {s.sub}
+                </div>
+              </div>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
-            {s.sub && <div className="text-[11px] text-muted-foreground/60 mt-0.5">{s.sub} rate</div>}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Main 3-column grid ── */}
@@ -479,11 +545,15 @@ function DashboardSkeleton() {
           <Skeleton className="h-8 w-36" />
         </div>
       </div>
-      <div className="grid grid-cols-5 gap-px border rounded-xl overflow-hidden bg-border">
-        {[1,2,3,4,5].map(i => (
-          <div key={i} className="bg-background p-5 space-y-2">
-            <Skeleton className="h-7 w-10" />
-            <Skeleton className="h-3 w-20" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px border rounded-xl overflow-hidden bg-border">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="bg-background p-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-3 rounded-full" />
+            </div>
+            <Skeleton className="h-7 w-12" />
+            <Skeleton className="h-2.5 w-20" />
           </div>
         ))}
       </div>

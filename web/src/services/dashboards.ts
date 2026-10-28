@@ -7,6 +7,8 @@ export interface DashboardStats {
   active_count: number;
   completed_count: number;
   pending_count: number;
+  shortlisted_count?: number;
+  hired_count?: number;
 }
 
 export interface LiveInterview {

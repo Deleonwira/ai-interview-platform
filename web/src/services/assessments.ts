@@ -17,7 +17,6 @@ export interface AssessmentListParams {
 
 export const assessmentsApi = {
   list: (params?: AssessmentListParams | number, search?: string) => {
-    // Handle both old signature list(page, search) and new list(params)
     const options: AssessmentListParams =
       typeof params === "number"
         ? { page: params, search }
@@ -64,4 +63,7 @@ export const assessmentsApi = {
       `/assessments/${assessmentId}/sessions`,
       { session: { candidate_name: candidateName, candidate_id: candidateId } }
     ),
+
+  deleteSession: (sessionId: number) =>
+    api.delete(`/sessions/${sessionId}`),
 };

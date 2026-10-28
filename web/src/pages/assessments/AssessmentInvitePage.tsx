@@ -11,6 +11,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pagination } from "@/components/ui/pagination";
@@ -27,6 +37,8 @@ import {
   UserRound,
   Search,
   X,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import type { Assessment, Session, PaginationMeta } from "@/types";
 import { useToast } from "@/components/ui/toast";
@@ -39,12 +51,14 @@ function SessionRow({
   assessmentId,
   onCopy,
   copiedId,
+  onDelete,
 }: {
   session: Session;
   index: number;
   assessmentId: string;
   onCopy: (id: number) => void;
   copiedId: number | null;
+  onDelete: (session: Session) => void;
 }) {
   const navigate = useNavigate();
   const isLive = session.status === "active";
@@ -142,6 +156,17 @@ function SessionRow({
               Results
             </Button>
           )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={() => onDelete(session)}
+            title="Delete candidate"
+            aria-label="Delete candidate"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
     </div>
@@ -166,6 +191,8 @@ export default function AssessmentInvitePage() {
   const [newSessionCopied, setNewSessionCopied] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [candidateNameInput, setCandidateNameInput] = useState("");
+  const [deletingSession, setDeletingSession] = useState<Session | null>(null);
+  const [deleteSessionLoading, setDeleteSessionLoading] = useState(false);
   const { toast } = useToast();
   usePageTitle(assessment ? assessment.name : "Assessment");
 
@@ -281,6 +308,21 @@ export default function AssessmentInvitePage() {
     setSearchQuery("");
     setStatusFilter("");
     setPage(1);
+  };
+
+  const handleDeleteSession = async () => {
+    if (!deletingSession) return;
+    setDeleteSessionLoading(true);
+    try {
+      await assessmentsApi.deleteSession(deletingSession.id);
+      toast("Candidate session deleted");
+      setDeletingSession(null);
+      loadSessions(page, searchQuery, statusFilter);
+    } catch {
+      toast("Failed to delete candidate session", "error");
+    } finally {
+      setDeleteSessionLoading(false);
+    }
   };
 
   if (loading) {
@@ -511,6 +553,7 @@ export default function AssessmentInvitePage() {
                       if (s) copyLink(s, sid);
                     }}
                     copiedId={copiedId}
+                    onDelete={(s) => setDeletingSession(s)}
                   />
                 );
               })}
@@ -551,6 +594,42 @@ export default function AssessmentInvitePage() {
           </div>
         </>
       )}
+
+      {/* Delete Candidate Session Dialog */}
+      <AlertDialog
+        open={!!deletingSession}
+        onOpenChange={(open) => !open && setDeletingSession(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Candidate Session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the interview session for &ldquo;
+              <strong className="text-foreground">
+                {deletingSession?.candidate_name || `Candidate #${deletingSession?.id}`}
+              </strong>
+              &rdquo;? All transcripts, coverage evaluations, and portfolios for this candidate will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSessionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSession}
+              disabled={deleteSessionLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteSessionLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Candidate"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

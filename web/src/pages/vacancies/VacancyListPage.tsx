@@ -1,13 +1,24 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { vacanciesApi } from "@/services/vacancies";
-import { Plus, ChevronRight, Search, X, ArrowUpDown } from "lucide-react";
+import { Plus, ChevronRight, Search, X, ArrowUpDown, Trash2, Loader2 } from "lucide-react";
 import type { Vacancy, PaginationMeta } from "@/types";
 
 export default function VacancyListPage() {
@@ -19,7 +30,10 @@ export default function VacancyListPage() {
   const [sortBy, setSortBy] = useState<"created_at" | "updated_at">("created_at");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [deletingVacancy, setDeletingVacancy] = useState<Vacancy | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
   usePageTitle("Vacancies");
 
   // Debounce search input by 350ms
@@ -61,6 +75,21 @@ export default function VacancyListPage() {
     setSearchQuery("");
     setSortBy("created_at");
     setPage(1);
+  };
+
+  const handleDeleteVacancy = async () => {
+    if (!deletingVacancy) return;
+    setDeleteLoading(true);
+    try {
+      await vacanciesApi.delete(deletingVacancy.id);
+      toast("Vacancy deleted successfully");
+      setDeletingVacancy(null);
+      loadVacancies(page, searchQuery, sortBy);
+    } catch {
+      toast("Failed to delete vacancy", "error");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const isFiltered = Boolean(searchQuery || sortBy !== "created_at");
@@ -195,7 +224,23 @@ export default function VacancyListPage() {
                     </p>
                   )}
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingVacancy(v);
+                    }}
+                    title="Delete vacancy"
+                    aria-label="Delete vacancy"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -212,6 +257,40 @@ export default function VacancyListPage() {
           onPageChange={(p) => setPage(p)}
         />
       )}
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog
+        open={!!deletingVacancy}
+        onOpenChange={(open) => !open && setDeletingVacancy(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vacancy?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the vacancy &ldquo;
+              <strong className="text-foreground">{deletingVacancy?.role_title}</strong>
+              &rdquo;? All associated benchmark reports and candidate comparisons will also be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteVacancy}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Vacancy"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

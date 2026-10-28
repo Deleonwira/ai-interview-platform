@@ -5,6 +5,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/ui/pagination";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { assessmentsApi } from "@/services/assessments";
 import {
   Plus,
@@ -16,8 +26,11 @@ import {
   Globe,
   ArrowUpDown,
   Filter,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import type { Assessment, PaginationMeta } from "@/types";
+import { useToast } from "@/components/ui/toast";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { cn } from "@/lib/utils";
 
@@ -74,7 +87,10 @@ export default function AssessmentListPage() {
   const [sortBy, setSortBy] = useState<"created_at" | "updated_at">("created_at");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [deletingAssessment, setDeletingAssessment] = useState<Assessment | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
   usePageTitle("Assessments");
 
   // Debounce search input by 350ms
@@ -118,6 +134,21 @@ export default function AssessmentListPage() {
     setStatusFilter("");
     setSortBy("created_at");
     setPage(1);
+  };
+
+  const handleDeleteAssessment = async () => {
+    if (!deletingAssessment) return;
+    setDeleteLoading(true);
+    try {
+      await assessmentsApi.delete(deletingAssessment.id);
+      toast("Assessment deleted successfully");
+      setDeletingAssessment(null);
+      loadAssessments(page, searchQuery, statusFilter, sortBy);
+    } catch {
+      toast("Failed to delete assessment", "error");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const isFiltered = Boolean(searchQuery || statusFilter || sortBy !== "created_at");
@@ -306,7 +337,22 @@ export default function AssessmentListPage() {
                     </div>
                   </div>
 
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingAssessment(a);
+                      }}
+                      title="Delete assessment"
+                      aria-label="Delete assessment"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -324,6 +370,40 @@ export default function AssessmentListPage() {
           onPageChange={(p) => setPage(p)}
         />
       )}
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog
+        open={!!deletingAssessment}
+        onOpenChange={(open) => !open && setDeletingAssessment(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Assessment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &ldquo;
+              <strong className="text-foreground">{deletingAssessment?.name}</strong>
+              &rdquo;? All {deletingAssessment?.candidate_count ?? 0} associated candidate sessions, transcripts, and portfolios will be permanently removed. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAssessment}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Assessment"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

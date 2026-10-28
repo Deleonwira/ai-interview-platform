@@ -248,7 +248,7 @@ export default function InterviewPage() {
   return (
     <div className="max-w-xl mx-auto px-4 flex flex-col h-full">
       {/* Top bar */}
-      <div className="flex items-center justify-between py-3 border-b sticky top-12 bg-white z-10">
+      <div className="flex items-center justify-between py-3 border-b sticky top-12 bg-background z-10">
         <span className="text-sm font-medium">AI Interview</span>
         {candidateInfo && (
           <InterviewTimer
@@ -320,7 +320,7 @@ export default function InterviewPage() {
       </div>
 
       {/* Bottom bar */}
-      <div className="border-t py-3 flex items-center justify-between gap-4 sticky bottom-0 bg-white">
+      <div className="border-t py-3 flex items-center justify-between gap-4 sticky bottom-0 bg-background">
         <ConnectionStatus state={wsConnectionStatus} />
 
         <div className="flex items-center gap-3">

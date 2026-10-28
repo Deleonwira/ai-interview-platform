@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Pagination } from "@/components/ui/pagination";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { assessmentsApi } from "@/services/assessments";
 import { LEVEL_LABELS } from "@/utils/constants";
 import {
@@ -39,6 +40,7 @@ import {
   X,
   Trash2,
   Loader2,
+  BarChart2,
 } from "lucide-react";
 import type { Assessment, Session, PaginationMeta } from "@/types";
 import { useToast } from "@/components/ui/toast";
@@ -52,6 +54,7 @@ function SessionRow({
   onCopy,
   copiedId,
   onDelete,
+  onRename,
 }: {
   session: Session;
   index: number;
@@ -59,21 +62,94 @@ function SessionRow({
   onCopy: (id: number) => void;
   copiedId: number | null;
   onDelete: (session: Session) => void;
+  onRename: (sessionId: number, newName: string) => Promise<void>;
 }) {
   const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(session.candidate_name || "");
+  const [renaming, setRenaming] = useState(false);
+
   const isLive = session.status === "active";
   const isEnded = session.status === "ended";
   const isPending = session.status === "pending";
   const displayName = session.candidate_name || `Candidate #${session.id}`;
 
+  const handleSaveRename = async () => {
+    const trimmed = editName.trim();
+    if (!trimmed || trimmed === session.candidate_name) {
+      setEditing(false);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await onRename(session.id, trimmed);
+      setEditing(false);
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between py-3 px-4 hover:bg-muted/30 transition-colors">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="group flex items-center justify-between py-3 px-4 hover:bg-muted/30 transition-colors">
+      <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
         <div className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-xs font-medium text-muted-foreground shrink-0">
           {index}
         </div>
-        <div className="space-y-0.5 min-w-0">
-          <div className="text-sm font-medium text-foreground truncate">{displayName}</div>
+        <div className="space-y-0.5 min-w-0 flex-1">
+          {editing ? (
+            <div className="flex items-center gap-1.5 py-0.5">
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveRename();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                autoFocus
+                disabled={renaming}
+                placeholder="Candidate name..."
+                className="text-xs sm:text-sm font-medium border border-input rounded px-2 py-0.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary w-40 sm:w-56"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSaveRename}
+                disabled={renaming}
+                className="h-6 w-6 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                title="Save name"
+              >
+                {renaming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditing(false)}
+                disabled={renaming}
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                title="Cancel"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 group/name">
+              <div className="text-sm font-medium text-foreground truncate">{displayName}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditName(session.candidate_name || "");
+                  setEditing(true);
+                }}
+                className="opacity-0 group-hover:opacity-100 hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity p-0.5 rounded"
+                title="Edit candidate name"
+                aria-label="Edit candidate name"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
           {session.started_at ? (
             <div className="text-xs text-muted-foreground">
               {new Date(session.started_at).toLocaleDateString()}{" "}
@@ -290,6 +366,18 @@ export default function AssessmentInvitePage() {
     }
   };
 
+  const handleRenameSession = async (sessionId: number, newName: string) => {
+    try {
+      await assessmentsApi.updateSession(sessionId, { candidate_name: newName });
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, candidate_name: newName } : s))
+      );
+      toast("Candidate name updated");
+    } catch {
+      toast("Failed to update candidate name", "error");
+    }
+  };
+
   const copyLink = (session: Session, id: number) => {
     navigator.clipboard.writeText(session.invite_url);
     setCopiedId(id);
@@ -328,6 +416,7 @@ export default function AssessmentInvitePage() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto space-y-4">
+        <Skeleton className="h-5 w-48" />
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-48 w-full" />
@@ -337,8 +426,16 @@ export default function AssessmentInvitePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb
+        items={[
+          { label: "Assessments", href: "/assessments" },
+          { label: assessment?.name ?? "Assessment" },
+        ]}
+      />
+
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <Link to="/assessments" className="text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
@@ -355,9 +452,20 @@ export default function AssessmentInvitePage() {
             </div>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate(`/assessments/${id}/edit`)}>
-          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-        </Button>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/assessments/${id}/summary`)}
+            title="View assessment summary report"
+          >
+            <BarChart2 className="h-3.5 w-3.5 mr-1.5" /> Summary
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/assessments/${id}/edit`)}>
+            <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+          </Button>
+        </div>
       </div>
 
       {/* Invite card */}
@@ -554,6 +662,7 @@ export default function AssessmentInvitePage() {
                     }}
                     copiedId={copiedId}
                     onDelete={(s) => setDeletingSession(s)}
+                    onRename={handleRenameSession}
                   />
                 );
               })}

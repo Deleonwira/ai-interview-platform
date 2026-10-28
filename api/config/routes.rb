@@ -10,6 +10,9 @@ Rails.application.routes.draw do
       # Health check
       get  'health', to: proc { [200, {}, [{ status: 'ok' }.to_json]] }
 
+      # Dashboard
+      get  'dashboard', to: 'dashboards#show'
+
       # Upload speed test — accepts any payload, discards it, returns bytes received
       post 'speed_test', to: proc { |env|
         bytes = env['CONTENT_LENGTH'].to_i
@@ -19,10 +22,13 @@ Rails.application.routes.draw do
       # Assessments
       resources :assessments do
         resources :sessions, only: %i[index create]
+        member do
+          get :summary, to: 'assessment_summaries#show'
+        end
       end
 
       # Sessions
-      resources :sessions, only: %i[show destroy] do
+      resources :sessions, only: %i[show update destroy] do
         member do
           post :end_session
           get  :coverage

@@ -15,6 +15,36 @@ export interface AssessmentListParams {
   sort_by?: "created_at" | "updated_at";
 }
 
+export interface AssessmentSummaryData {
+  assessment: {
+    id: number;
+    name: string;
+    time_limit_min: number;
+    language?: string;
+  };
+  sessions: Array<{
+    id: number;
+    candidate_name?: string;
+    status: "pending" | "active" | "ended";
+    end_reason?: string;
+    started_at?: string;
+    ended_at?: string;
+    duration_seconds?: number;
+    created_at?: string;
+    portfolio_status?: string;
+    portfolio_id?: number;
+  }>;
+  stats: {
+    total: number;
+    pending: number;
+    active: number;
+    ended: number;
+    completed: number;
+    failed: number;
+    avg_duration_min?: number;
+  };
+}
+
 export const assessmentsApi = {
   list: (params?: AssessmentListParams | number, search?: string) => {
     const options: AssessmentListParams =
@@ -64,6 +94,12 @@ export const assessmentsApi = {
       { session: { candidate_name: candidateName, candidate_id: candidateId } }
     ),
 
+  updateSession: (sessionId: number, data: { candidate_name: string }) =>
+    api.patch<{ session: Session }>(`/sessions/${sessionId}`, { session: data }),
+
   deleteSession: (sessionId: number) =>
     api.delete(`/sessions/${sessionId}`),
+
+  getSummary: (assessmentId: number) =>
+    api.get<AssessmentSummaryData>(`/assessments/${assessmentId}/summary`),
 };

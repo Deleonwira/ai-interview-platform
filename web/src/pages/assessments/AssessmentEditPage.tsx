@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -36,6 +37,7 @@ import SkillPicker from "@/components/assessment/SkillPicker";
 import { ArrowLeft, Plus, Loader2, Trash2 } from "lucide-react";
 import { assessmentsApi } from "@/services/assessments";
 import { TIME_LIMIT_OPTIONS } from "@/utils/constants";
+import type { AssessmentSkill } from "@/types";
 import type { AssessmentFormValues } from "./AssessmentNewPage";
 import { useToast } from "@/components/ui/toast";
 
@@ -119,6 +121,7 @@ export default function AssessmentEditPage() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto space-y-4">
+        <Skeleton className="h-5 w-48" />
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-32 w-full" />
@@ -128,6 +131,15 @@ export default function AssessmentEditPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb
+        items={[
+          { label: "Assessments", href: "/assessments" },
+          { label: form.getValues("name") || "Assessment", href: `/assessments/${id}/invite` },
+          { label: "Edit" },
+        ]}
+      />
+
       <div className="flex items-center gap-2">
         <Link to={`/assessments/${id}/invite`} className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />

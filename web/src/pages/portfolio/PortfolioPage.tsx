@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import SkillPortfolioCard from "@/components/portfolio/SkillPortfolioCard";
 import { sessionsApi } from "@/services/sessions";
 import { vacanciesApi } from "@/services/vacancies";
@@ -13,7 +14,6 @@ import { ArrowLeft, Download, Loader2, RefreshCw, Zap, FileText } from "lucide-r
 import type { Portfolio, AssessorOverride, Vacancy } from "@/types";
 import { useToast } from "@/components/ui/toast";
 import { usePageTitle } from "@/hooks/usePageTitle";
-
 
 export default function PortfolioPage() {
   const { id, sessionId } = useParams<{ id: string; sessionId: string }>();
@@ -26,9 +26,9 @@ export default function PortfolioPage() {
   const [selectedVacancy, setSelectedVacancy] = useState<string>("");
   const [exporting, setExporting] = useState<"pdf" | "json" | null>(null);
   const [candidateName, setCandidateName] = useState<string | null>(null);
+  const [assessmentName, setAssessmentName] = useState<string | null>(null);
   const { toast } = useToast();
   usePageTitle(candidateName ? `Portfolio · ${candidateName}` : "Portfolio");
-
 
   const fetchPortfolio = useCallback(async () => {
     const res = await sessionsApi.getPortfolio(Number(sessionId));
@@ -52,6 +52,7 @@ export default function PortfolioPage() {
       .then(([, vRes, sRes]) => {
         setVacancies(vRes.data.vacancies);
         setCandidateName(sRes.data.session.candidate_name ?? null);
+        setAssessmentName(sRes.data.session.assessment?.name ?? null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -105,6 +106,7 @@ export default function PortfolioPage() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto space-y-4">
+        <Skeleton className="h-5 w-48" />
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-48 w-full" />
         <Skeleton className="h-48 w-full" />
@@ -114,6 +116,16 @@ export default function PortfolioPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb
+        items={[
+          { label: "Assessments", href: "/assessments" },
+          { label: assessmentName || "Assessment", href: `/assessments/${id}/invite` },
+          { label: candidateName || `Candidate #${sessionId}`, href: `/assessments/${id}/invite` },
+          { label: "Portfolio" },
+        ]}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">

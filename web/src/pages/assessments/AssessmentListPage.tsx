@@ -6,6 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { assessmentsApi } from "@/services/assessments";
 import { Plus, Clock, ChevronRight } from "lucide-react";
 import type { Assessment } from "@/types";
+import { usePageTitle } from "@/hooks/usePageTitle";
+
 
 function SessionSummary({ session }: { session?: Assessment["latest_session"] }) {
   if (!session) return null;
@@ -32,6 +34,8 @@ export default function AssessmentListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const navigate = useNavigate();
+  usePageTitle("Assessments");
+
 
   useEffect(() => {
     assessmentsApi

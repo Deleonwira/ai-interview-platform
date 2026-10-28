@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +13,7 @@ export default function VacancyListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const navigate = useNavigate();
+  usePageTitle("Vacancies");
 
   useEffect(() => {
     vacanciesApi.list()

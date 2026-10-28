@@ -12,7 +12,7 @@ import { vacanciesApi } from "@/services/vacancies";
 import { portfoliosApi } from "@/services/portfolios";
 import { feedbackApi } from "@/services/feedback";
 import { usePolling } from "@/hooks/usePolling";
-import { ArrowLeft, Download, Loader2, RefreshCw, Zap, FileText } from "lucide-react";
+import { ArrowLeft, Download, Loader2, RefreshCw, Zap, FileText, AlertTriangle, AlertCircle, MessageSquareOff } from "lucide-react";
 import type { Portfolio, AssessorOverride, Vacancy, CandidateFeedback } from "@/types";
 import { useToast } from "@/components/ui/toast";
 import { usePageTitle } from "@/hooks/usePageTitle";
@@ -199,10 +199,58 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      {/* Failed state */}
-      {!generating && portfolio?.generation_status === "failed" && (
-        <div className="border border-destructive/40 rounded-lg p-6 text-center space-y-3">
-          <p className="text-sm text-destructive">Portfolio generation failed.</p>
+      {/* Empty transcript state */}
+      {!generating && (portfolio?.context_status === "empty_transcript" || (portfolio?.generation_status === "failed" && portfolio?.generation_error?.includes("Transkrip interview kosong"))) && (
+        <div className="border border-amber-500/30 bg-amber-500/5 rounded-xl p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
+            <MessageSquareOff className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="font-semibold text-foreground text-base">Transkrip Interview Kosong</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              {portfolio?.context_notes || "Sesi interview tidak memiliki rekaman percakapan kandidat. Evaluasi kompetensi tidak dapat dilakukan karena kandidat tidak memberikan jawaban."}
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Link
+              to={`/assessments/${id}/sessions/${sessionId}/transcript`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium border rounded-md px-3 py-1.5 bg-background hover:bg-accent transition-colors"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Periksa Transkrip
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await sessionsApi.regeneratePortfolio(Number(sessionId));
+                  setGenerating(true);
+                } catch (err: any) {
+                  toast(err?.response?.data?.error || "Gagal regenerate portfolio: transkrip kosong");
+                }
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Coba Lagi
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* General failed state */}
+      {!generating && portfolio?.generation_status === "failed" && portfolio?.context_status !== "empty_transcript" && !portfolio?.generation_error?.includes("Transkrip interview kosong") && (
+        <div className="border border-destructive/40 bg-destructive/5 rounded-xl p-6 text-center space-y-3">
+          <div className="w-10 h-10 rounded-full bg-destructive/10 text-destructive mx-auto flex items-center justify-center">
+            <AlertCircle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-destructive">Portfolio generation failed.</p>
+            {portfolio?.generation_error && (
+              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+                {portfolio.generation_error}
+              </p>
+            )}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -219,6 +267,26 @@ export default function PortfolioPage() {
       {/* Ready state */}
       {!generating && portfolio?.generation_status === "complete" && (
         <>
+          {/* Out of context warning banner */}
+          {portfolio.context_status === "out_of_context" && (
+            <div className="border border-rose-500/30 bg-rose-500/10 dark:bg-rose-950/20 rounded-xl p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-rose-700 dark:text-rose-300">
+                    Jawaban Tidak Sesuai Konteks (Out of Context)
+                  </h3>
+                  <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300">
+                    Peringatan
+                  </span>
+                </div>
+                <p className="text-xs text-rose-600/90 dark:text-rose-300/90">
+                  {portfolio.context_notes || "Sebagian besar jawaban kandidat terdeteksi tidak relevan atau di luar konteks posisi yang dinilai. Harap evaluasi ulang transkrip dan sesuaikan level kompetensi secara manual bila diperlukan."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Configured skills */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold">Configured Skills</h2>

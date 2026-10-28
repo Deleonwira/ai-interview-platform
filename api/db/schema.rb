@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2026_10_28_220000) do
+ActiveRecord::Schema[7.0].define(version: 2026_10_29_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -126,7 +126,10 @@ ActiveRecord::Schema[7.0].define(version: 2026_10_28_220000) do
     t.enum "generation_status", default: "pending", null: false, enum_type: "generation_status"
     t.datetime "generated_at"
     t.text "generation_error"
+    t.string "context_status", limit: 30, default: "relevant", null: false
+    t.text "context_notes"
     t.index ["candidate_id"], name: "index_portfolios_on_candidate_id"
+    t.index ["context_status"], name: "idx_portfolios_context_status"
     t.index ["session_id"], name: "index_portfolios_on_session_id", unique: true
   end
 

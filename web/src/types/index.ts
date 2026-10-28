@@ -92,6 +92,8 @@ export interface Portfolio {
   session_id: number;
   candidate_id?: number;
   generation_status: "pending" | "generating" | "complete" | "failed";
+  context_status?: "relevant" | "empty_transcript" | "out_of_context";
+  context_notes?: string | null;
   generated_at?: string;
   generation_error?: string;
   skills: PortfolioSkill[];

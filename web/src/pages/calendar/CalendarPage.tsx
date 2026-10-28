@@ -14,6 +14,10 @@ import {
   Clock,
   FileText,
   Eye,
+  Search,
+  X,
+  RotateCcw,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,12 +35,14 @@ interface CalendarEvent {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const EVENT_STYLES: Record<EventType, { dot: string; bg: string; text: string; Icon: React.ElementType }> = {
-  invited:  { dot: "bg-blue-500",    bg: "bg-blue-50 dark:bg-blue-950/30",    text: "text-blue-700 dark:text-blue-300",   Icon: Mail },
-  started:  { dot: "bg-amber-500",   bg: "bg-amber-50 dark:bg-amber-950/30",  text: "text-amber-700 dark:text-amber-300", Icon: Radio },
-  ended:    { dot: "bg-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-700 dark:text-emerald-300", Icon: CheckCircle2 },
-  failed:   { dot: "bg-rose-500",    bg: "bg-rose-50 dark:bg-rose-950/30",    text: "text-rose-700 dark:text-rose-300",   Icon: AlertCircle },
+const EVENT_STYLES: Record<EventType, { dot: string; bg: string; text: string; border: string; Icon: React.ElementType; label: string }> = {
+  invited:  { dot: "bg-blue-500",    bg: "bg-blue-50 dark:bg-blue-950/30",    text: "text-blue-700 dark:text-blue-300",   border: "border-blue-300 dark:border-blue-800",   Icon: Mail,         label: "Invited" },
+  started:  { dot: "bg-amber-500",   bg: "bg-amber-50 dark:bg-amber-950/30",  text: "text-amber-700 dark:text-amber-300", border: "border-amber-300 dark:border-amber-800", Icon: Radio,        label: "Started" },
+  ended:    { dot: "bg-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-700 dark:text-emerald-300", border: "border-emerald-300 dark:border-emerald-800", Icon: CheckCircle2, label: "Completed" },
+  failed:   { dot: "bg-rose-500",    bg: "bg-rose-50 dark:bg-rose-950/30",    text: "text-rose-700 dark:text-rose-300",   border: "border-rose-300 dark:border-rose-800",   Icon: AlertCircle,  label: "Failed" },
 };
+
+const ALL_EVENT_TYPES: EventType[] = ["invited", "started", "ended", "failed"];
 
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -48,7 +54,6 @@ const MONTH_NAMES = [
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function toLocalDate(iso: string): string {
-  // Return "YYYY-MM-DD" in local timezone
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -92,10 +97,8 @@ function buildEvents(sessions: PipelineSession[]): CalendarEvent[] {
   return events.sort((a, b) => a.time.localeCompare(b.time));
 }
 
-/** Build 6-week grid starting from the Monday before month's first day */
 function buildGrid(year: number, month: number): Date[] {
   const first = new Date(year, month, 1);
-  // getDay(): 0=Sun,1=Mon...6=Sat — convert to Mon-first (0=Mon...6=Sun)
   const startDow = (first.getDay() + 6) % 7;
   const start = new Date(first);
   start.setDate(first.getDate() - startDow);
@@ -126,6 +129,11 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(today.getMonth());
   const [selected, setSelected] = useState<string>(dateKey(today));
 
+  // ── Filters & Search state ──
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTypes, setSelectedTypes] = useState<EventType[]>(ALL_EVENT_TYPES);
+  const [selectedAssessment, setSelectedAssessment] = useState<string>("all");
+
   const load = useCallback(async () => {
     try {
       const res = await pipelineApi.getSessions();
@@ -140,14 +148,54 @@ export default function CalendarPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Unique assessment names for the filter dropdown
+  const assessmentsList = useMemo(() => {
+    const set = new Set<string>();
+    sessions.forEach((s) => {
+      if (s.assessment_name) set.add(s.assessment_name);
+    });
+    return Array.from(set).sort();
+  }, [sessions]);
+
+  // Build raw events
   const allEvents = useMemo(() => buildEvents(sessions), [sessions]);
+
+  // Apply filters & search query
+  const filteredEvents = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return allEvents.filter((ev) => {
+      // Event type filter
+      if (!selectedTypes.includes(ev.type)) return false;
+
+      // Assessment filter
+      if (selectedAssessment !== "all" && ev.session.assessment_name !== selectedAssessment) {
+        return false;
+      }
+
+      // Search query (Candidate name or assessment name or label)
+      if (q) {
+        const candidateMatch = (ev.session.candidate_name || `Candidate #${ev.session.id}`)
+          .toLowerCase()
+          .includes(q);
+        const assessmentMatch = (ev.session.assessment_name || "")
+          .toLowerCase()
+          .includes(q);
+        const labelMatch = ev.label.toLowerCase().includes(q);
+        if (!candidateMatch && !assessmentMatch && !labelMatch) return false;
+      }
+
+      return true;
+    });
+  }, [allEvents, searchQuery, selectedTypes, selectedAssessment]);
+
+  // Group filtered events by date
   const eventsByDate = useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {};
-    for (const ev of allEvents) {
+    for (const ev of filteredEvents) {
       (map[ev.date] ??= []).push(ev);
     }
     return map;
-  }, [allEvents]);
+  }, [filteredEvents]);
 
   const grid = useMemo(() => buildGrid(year, month), [year, month]);
 
@@ -168,6 +216,46 @@ export default function CalendarPage() {
     setSelected(todayKey);
   };
 
+  // Toggle individual event type filter
+  const toggleEventType = (type: EventType) => {
+    setSelectedTypes((prev) => {
+      if (prev.includes(type)) {
+        // If clicking the only active one, reset to all
+        if (prev.length === 1) return ALL_EVENT_TYPES;
+        return prev.filter((t) => t !== type);
+      } else {
+        return [...prev, type];
+      }
+    });
+  };
+
+  const selectAllTypes = () => {
+    setSelectedTypes(ALL_EVENT_TYPES);
+  };
+
+  const isFiltered =
+    searchQuery.trim() !== "" ||
+    selectedTypes.length !== ALL_EVENT_TYPES.length ||
+    selectedAssessment !== "all";
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setSelectedTypes(ALL_EVENT_TYPES);
+    setSelectedAssessment("all");
+  };
+
+  // Find next date with matching events if selected date is empty
+  const jumpToFirstMatch = () => {
+    const datesWithEvents = Object.keys(eventsByDate).sort();
+    if (datesWithEvents.length > 0) {
+      const target = datesWithEvents[0];
+      setSelected(target);
+      const [tYear, tMonth] = target.split("-").map(Number);
+      setYear(tYear);
+      setMonth(tMonth - 1);
+    }
+  };
+
   if (loading) return <CalendarSkeleton />;
 
   if (error) {
@@ -181,37 +269,133 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-4">
-      {/* Page header */}
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Session activity by date — invitations, interviews, and completions.
-        </p>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Session activity timeline by date — track invitations, live interviews, and evaluations.
+          </p>
+        </div>
+
+        {isFiltered && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">
+              Showing <strong>{filteredEvents.length}</strong> of {allEvents.length} events
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Reset filters
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3">
-        {(Object.entries(EVENT_STYLES) as [EventType, typeof EVENT_STYLES[EventType]][]).map(([type, s]) => (
-          <div key={type} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className={cn("h-2 w-2 rounded-full shrink-0", s.dot)} />
-            {type.charAt(0).toUpperCase() + type.slice(1)}
+      {/* ── Filter & Search Toolbar ── */}
+      <div className="flex flex-col md:flex-row gap-3 p-3 rounded-xl border bg-card shadow-2xs">
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search candidate name, assessment, or event..."
+            className="w-full pl-8 pr-8 py-1.5 text-xs bg-background border border-border rounded-md outline-none focus:border-primary/60 transition-colors placeholder:text-muted-foreground/50"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Assessment Dropdown Filter */}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <select
+              value={selectedAssessment}
+              onChange={(e) => setSelectedAssessment(e.target.value)}
+              className="h-8 pl-3 pr-8 text-xs bg-background border border-border rounded-md outline-none focus:border-primary/60 cursor-pointer appearance-none text-foreground"
+            >
+              <option value="all">All Assessments ({assessmentsList.length})</option>
+              {assessmentsList.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <SlidersHorizontal className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
           </div>
-        ))}
+        </div>
+
+        {/* Event Type Filter Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 md:pt-0 border-t md:border-t-0 border-border">
+          <button
+            onClick={selectAllTypes}
+            className={cn(
+              "px-2.5 py-1 text-xs rounded-full border transition-all font-medium",
+              selectedTypes.length === ALL_EVENT_TYPES.length
+                ? "bg-foreground text-background border-foreground"
+                : "bg-background text-muted-foreground border-border hover:bg-muted"
+            )}
+          >
+            All
+          </button>
+          {ALL_EVENT_TYPES.map((type) => {
+            const s = EVENT_STYLES[type];
+            const Icon = s.Icon;
+            const isSelected = selectedTypes.includes(type);
+            return (
+              <button
+                key={type}
+                onClick={() => toggleEventType(type)}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-all",
+                  isSelected
+                    ? cn(s.bg, s.text, s.border, "font-medium shadow-2xs")
+                    : "opacity-40 hover:opacity-80 bg-background text-muted-foreground border-border"
+                )}
+                title={`Filter by ${s.label}`}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", s.dot)} />
+                <Icon className="h-3 w-3 shrink-0" />
+                <span>{s.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* ── Calendar ── */}
-        <div className="flex-1 min-w-0 border rounded-xl overflow-hidden bg-background">
+        <div className="flex-1 w-full min-w-0 border rounded-xl overflow-hidden bg-background">
           {/* Month navigation */}
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <div className="flex items-center gap-2">
-              <button onClick={prevMonth} className="p-1 rounded hover:bg-muted transition-colors">
+              <button
+                onClick={prevMonth}
+                aria-label="Previous month"
+                className="p-1 rounded hover:bg-muted transition-colors"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <h2 className="text-sm font-semibold min-w-[140px] text-center">
                 {MONTH_NAMES[month]} {year}
               </h2>
-              <button onClick={nextMonth} className="p-1 rounded hover:bg-muted transition-colors">
+              <button
+                onClick={nextMonth}
+                aria-label="Next month"
+                className="p-1 rounded hover:bg-muted transition-colors"
+              >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -246,10 +430,10 @@ export default function CalendarPage() {
                   key={i}
                   onClick={() => setSelected(key)}
                   className={cn(
-                    "relative min-h-[72px] p-1.5 border-b border-r text-left transition-colors",
+                    "relative min-h-[74px] p-1.5 border-b border-r text-left transition-colors",
                     "last:border-r-0",
                     isCurrentMonth ? "bg-background hover:bg-muted/30" : "bg-muted/10 hover:bg-muted/20",
-                    isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/30",
+                    isSelected && "bg-primary/5 ring-1 ring-inset ring-primary/40",
                   )}
                 >
                   {/* Day number */}
@@ -266,7 +450,7 @@ export default function CalendarPage() {
 
                   {/* Event dots */}
                   {types.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5 mt-1">
+                    <div className="flex flex-wrap gap-1 mt-1.5">
                       {types.slice(0, 4).map((t) => (
                         <span
                           key={t}
@@ -278,7 +462,7 @@ export default function CalendarPage() {
 
                   {/* Event count badge */}
                   {events.length > 0 && (
-                    <span className="absolute bottom-1 right-1.5 text-[10px] text-muted-foreground/60">
+                    <span className="absolute bottom-1 right-1.5 text-[10px] font-medium text-muted-foreground/70">
                       {events.length}
                     </span>
                   )}
@@ -289,28 +473,65 @@ export default function CalendarPage() {
         </div>
 
         {/* ── Event panel ── */}
-        <div className="w-full lg:w-72 shrink-0 border rounded-xl overflow-hidden bg-background">
+        <div className="w-full lg:w-80 shrink-0 border rounded-xl overflow-hidden bg-background">
           {/* Panel header */}
-          <div className="px-4 py-3 border-b">
-            <p className="text-sm font-semibold">
-              {new Date(selected + "T00:00:00").toLocaleDateString([], {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {selectedEvents.length === 0
-                ? "No events"
-                : `${selectedEvents.length} event${selectedEvents.length > 1 ? "s" : ""}`}
-            </p>
+          <div className="px-4 py-3 border-b flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">
+                {new Date(selected + "T00:00:00").toLocaleDateString([], {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {selectedEvents.length === 0
+                  ? "No matching events"
+                  : `${selectedEvents.length} event${selectedEvents.length > 1 ? "s" : ""}`}
+              </p>
+            </div>
+
+            {selected !== todayKey && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelected(todayKey)}
+                className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+              >
+                Go to today
+              </Button>
+            )}
           </div>
 
           {/* Events list */}
-          <div className="divide-y max-h-[500px] overflow-y-auto">
+          <div className="divide-y max-h-[520px] overflow-y-auto">
             {selectedEvents.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-muted-foreground/60">
-                No session activity on this day.
+              <div className="px-4 py-10 text-center space-y-2">
+                <p className="text-xs text-muted-foreground/70">
+                  {isFiltered
+                    ? "No events matching your filter on this day."
+                    : "No session activity on this day."}
+                </p>
+                {isFiltered && Object.keys(eventsByDate).length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={jumpToFirstMatch}
+                  >
+                    Jump to nearest event
+                  </Button>
+                )}
+                {isFiltered && (
+                  <div>
+                    <button
+                      onClick={resetFilters}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Clear active filters
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               selectedEvents.map((ev, i) => (
@@ -346,7 +567,7 @@ function EventCard({ event }: { event: CalendarEvent }) {
     (session.status === "ended" && session.end_reason !== "error");
 
   return (
-    <div className={cn("px-4 py-3 space-y-1.5", style.bg)}>
+    <div className={cn("px-4 py-3 space-y-1.5 transition-colors", style.bg)}>
       {/* Event type + time */}
       <div className="flex items-center justify-between">
         <div className={cn("flex items-center gap-1.5 text-[11px] font-medium", style.text)}>
@@ -398,6 +619,7 @@ function CalendarSkeleton() {
         <Skeleton className="h-7 w-32" />
         <Skeleton className="h-4 w-64" />
       </div>
+      <Skeleton className="h-12 w-full rounded-xl" />
       <div className="flex gap-4">
         <div className="flex-1 border rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b flex items-center justify-between">
@@ -410,7 +632,7 @@ function CalendarSkeleton() {
             ))}
           </div>
         </div>
-        <div className="w-72 border rounded-xl">
+        <div className="w-80 border rounded-xl">
           <div className="p-4 border-b space-y-1">
             <Skeleton className="h-5 w-32" />
             <Skeleton className="h-3 w-20" />
@@ -423,4 +645,3 @@ function CalendarSkeleton() {
     </div>
   );
 }
-

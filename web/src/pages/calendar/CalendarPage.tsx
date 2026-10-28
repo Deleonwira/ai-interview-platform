@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingBar } from "@/components/ui/loading";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { pipelineApi, type PipelineSession } from "@/services/pipeline";
 import {
@@ -17,6 +18,7 @@ import {
   Search,
   X,
   RotateCcw,
+  RotateCw,
   SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -124,6 +126,7 @@ export default function CalendarPage() {
   const today = new Date();
   const [sessions, setSessions] = useState<PipelineSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [year, setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -145,6 +148,15 @@ export default function CalendarPage() {
       setLoading(false);
     }
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -268,7 +280,14 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-in fade-in duration-300 relative">
+      {/* Top Indeterminate Loading Bar during refresh */}
+      {refreshing && (
+        <div className="absolute -top-4 inset-x-0">
+          <LoadingBar />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -278,22 +297,35 @@ export default function CalendarPage() {
           </p>
         </div>
 
-        {isFiltered && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">
-              Showing <strong>{filteredEvents.length}</strong> of {allEvents.length} events
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={resetFilters}
-              className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
-            >
-              <RotateCcw className="h-3 w-3 mr-1" />
-              Reset filters
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isFiltered && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">
+                Showing <strong>{filteredEvents.length}</strong> of {allEvents.length} events
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetFilters}
+                className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reset filters
+              </Button>
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={refreshing}
+            className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            onClick={handleRefresh}
+          >
+            <RotateCw className={cn("h-3.5 w-3.5 mr-1.5", refreshing && "animate-spin")} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
       </div>
 
       {/* ── Filter & Search Toolbar ── */}

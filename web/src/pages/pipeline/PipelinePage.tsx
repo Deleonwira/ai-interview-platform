@@ -15,6 +15,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingBar } from "@/components/ui/loading";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import {
   pipelineApi,
@@ -37,6 +38,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  RotateCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -127,6 +129,7 @@ export default function PipelinePage() {
   usePageTitle("Pipeline");
   const [sessions, setSessions] = useState<PipelineSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const [activeSession, setActiveSession] = useState<PipelineSession | null>(null);
 
@@ -153,6 +156,15 @@ export default function PipelinePage() {
       setLoading(false);
     }
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -239,7 +251,14 @@ export default function PipelinePage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-in fade-in duration-300 relative">
+      {/* Top Indeterminate Loading Bar during refresh */}
+      {refreshing && (
+        <div className="absolute -top-4 inset-x-0">
+          <LoadingBar />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -248,8 +267,15 @@ export default function PipelinePage() {
             Drag candidates across stages to track progress.
           </p>
         </div>
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={load}>
-          Refresh
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={refreshing}
+          className="h-8 text-xs text-muted-foreground hover:text-foreground"
+          onClick={handleRefresh}
+        >
+          <RotateCw className={cn("h-3.5 w-3.5 mr-1.5", refreshing && "animate-spin")} />
+          {refreshing ? "Refreshing..." : "Refresh"}
         </Button>
       </div>
 

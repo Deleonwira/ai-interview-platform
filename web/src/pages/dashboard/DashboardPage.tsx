@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingBar } from "@/components/ui/loading";
 import { dashboardsApi, type DashboardData } from "@/services/dashboards";
 import { pipelineApi, deriveColumn, type PipelineSession } from "@/services/pipeline";
 import { usePageTitle } from "@/hooks/usePageTitle";
@@ -19,6 +20,7 @@ import {
   Star,
   ClipboardList,
   UserCheck,
+  RotateCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +84,7 @@ export default function DashboardPage() {
   const [dashData, setDashData] = useState<DashboardData | null>(null);
   const [sessions, setSessions] = useState<PipelineSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
   const navigate = useNavigate();
   usePageTitle("Dashboard");
@@ -107,6 +110,15 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -220,7 +232,13 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-in fade-in duration-300 relative">
+      {/* Top Indeterminate Loading Bar during refresh */}
+      {refreshing && (
+        <div className="absolute -top-6 inset-x-0">
+          <LoadingBar />
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
@@ -231,6 +249,16 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={refreshing}
+            className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            onClick={handleRefresh}
+          >
+            <RotateCw className={cn("h-3.5 w-3.5 mr-1.5", refreshing && "animate-spin")} />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </Button>
           <Button
             variant="ghost" size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"

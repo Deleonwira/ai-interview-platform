@@ -13,6 +13,9 @@ Rails.application.routes.draw do
       # Dashboard
       get  'dashboard', to: 'dashboards#show'
 
+      # Pipeline (Kanban)
+      get  'pipeline', to: 'pipeline#index'
+
       # Upload speed test — accepts any payload, discards it, returns bytes received
       post 'speed_test', to: proc { |env|
         bytes = env['CONTENT_LENGTH'].to_i

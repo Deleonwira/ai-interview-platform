@@ -74,7 +74,7 @@ module Api
 
       # PATCH/PUT /api/v1/sessions/:id
       def update
-        permitted = params.require(:session).permit(:candidate_name)
+        permitted = params.require(:session).permit(:candidate_name, :pipeline_stage)
         if @session.update(permitted)
           json_response(session: session_json(@session))
         else
@@ -204,6 +204,7 @@ module Api
           invite_url:       session.invite_url,
           status:           session.status,
           end_reason:       session.end_reason,
+          pipeline_stage:   session.pipeline_stage,
           started_at:       session.started_at,
           ended_at:         session.ended_at,
           duration_seconds: session.duration_seconds,

@@ -3,8 +3,9 @@
 class Session < ApplicationRecord
   include TenantScoped
 
-  STATUSES   = %w[pending active ended failed].freeze
-  END_REASONS = %w[manual_candidate manual_assessor all_covered time_ceiling error].freeze
+  STATUSES        = %w[pending active ended failed].freeze
+  END_REASONS     = %w[manual_candidate manual_assessor all_covered time_ceiling error].freeze
+  PIPELINE_STAGES = %w[shortlisted hired rejected].freeze
 
   belongs_to :assessment
   has_many :transcript_turns, dependent: :destroy
@@ -14,6 +15,7 @@ class Session < ApplicationRecord
   validates :invite_token, presence: true, uniqueness: true
   validates :status, inclusion: { in: STATUSES }
   validates :end_reason, inclusion: { in: END_REASONS }, allow_nil: true
+  validates :pipeline_stage, inclusion: { in: PIPELINE_STAGES }, allow_nil: true
 
   before_validation :generate_invite_token, on: :create
 
